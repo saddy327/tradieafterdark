@@ -1,0 +1,2295 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: TradieAfterDark API specification
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: auth
+    description: Authentication operations
+  - name: tradies
+    description: Tradie profile operations
+  - name: jobs
+    description: Job lifecycle operations
+  - name: messages
+    description: In-app messaging operations
+  - name: reviews
+    description: Review operations
+  - name: admin
+    description: Admin operations
+  - name: webhooks
+    description: Webhook handlers
+
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  # AUTH
+  /auth/signup:
+    post:
+      operationId: signup
+      tags: [auth]
+      summary: Register a new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SignupBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Email already in use
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginBody"
+      responses:
+        "200":
+          description: Authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      summary: Logout
+      responses:
+        "204":
+          description: Logged out
+
+  /auth/refresh:
+    post:
+      operationId: refreshToken
+      tags: [auth]
+      summary: Refresh access token
+      responses:
+        "200":
+          description: New access token issued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: Invalid or expired refresh token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/forgot-password:
+    post:
+      operationId: forgotPassword
+      tags: [auth]
+      summary: Request password reset email
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ForgotPasswordBody"
+      responses:
+        "200":
+          description: Reset email sent if account exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  /auth/reset-password:
+    post:
+      operationId: resetPassword
+      tags: [auth]
+      summary: Reset password with token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResetPasswordBody"
+      responses:
+        "200":
+          description: Password reset
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          description: Invalid or expired token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/me:
+    get:
+      operationId: getMe
+      tags: [auth]
+      summary: Get current user
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: Unauthenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # TRADIES - Public
+  /tradies:
+    get:
+      operationId: listTradies
+      tags: [tradies]
+      summary: Browse live tradie profiles
+      parameters:
+        - name: trade
+          in: query
+          schema:
+            type: string
+        - name: postcode
+          in: query
+          schema:
+            type: string
+        - name: availability
+          in: query
+          schema:
+            type: string
+            enum: [evenings, weekends, both]
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 12
+      responses:
+        "200":
+          description: List of live tradies
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TradieListResponse"
+
+  /tradies/{slug}:
+    get:
+      operationId: getTradieBySlug
+      tags: [tradies]
+      summary: Get a tradie public profile
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Tradie profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TradiePublicProfile"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # TRADIE ONBOARDING
+  /tradie/onboarding/identity:
+    post:
+      operationId: submitIdentity
+      tags: [tradies]
+      summary: Submit identity info (onboarding step 1)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IdentityBody"
+      responses:
+        "200":
+          description: Identity submitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TradieProfileResponse"
+
+  /tradie/onboarding/trade:
+    post:
+      operationId: submitTradeInfo
+      tags: [tradies]
+      summary: Submit trade and service area (onboarding step 2)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TradeInfoBody"
+      responses:
+        "200":
+          description: Trade info submitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TradieProfileResponse"
+
+  /tradie/onboarding/availability:
+    post:
+      operationId: submitAvailability
+      tags: [tradies]
+      summary: Submit availability (onboarding step 3)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AvailabilityBody"
+      responses:
+        "200":
+          description: Availability submitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TradieProfileResponse"
+
+  /tradie/onboarding/licence:
+    post:
+      operationId: submitLicence
+      tags: [tradies]
+      summary: Submit licence (onboarding step 4)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LicenceBody"
+      responses:
+        "200":
+          description: Licence submitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TradieProfileResponse"
+
+  /tradie/onboarding/insurance:
+    post:
+      operationId: submitInsurance
+      tags: [tradies]
+      summary: Submit insurance (onboarding step 5)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InsuranceBody"
+      responses:
+        "200":
+          description: Insurance submitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TradieProfileResponse"
+
+  /tradie/onboarding/checkout:
+    post:
+      operationId: createCheckoutSession
+      tags: [tradies]
+      summary: Create Stripe Checkout session (onboarding step 6)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CheckoutBody"
+      responses:
+        "200":
+          description: Checkout URL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CheckoutResponse"
+
+  /tradie/upload-url:
+    post:
+      operationId: getUploadUrl
+      tags: [tradies]
+      summary: Get a signed Cloudinary upload URL
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UploadUrlBody"
+      responses:
+        "200":
+          description: Signed upload URL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UploadUrlResponse"
+
+  # TRADIE DASHBOARD
+  /tradie/profile:
+    get:
+      operationId: getMyProfile
+      tags: [tradies]
+      summary: Get current tradie's own profile
+      responses:
+        "200":
+          description: Tradie profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TradieProfileResponse"
+    patch:
+      operationId: updateMyProfile
+      tags: [tradies]
+      summary: Update tradie profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProfileBody"
+      responses:
+        "200":
+          description: Updated profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TradieProfileResponse"
+
+  /tradie/subscription:
+    get:
+      operationId: getSubscription
+      tags: [tradies]
+      summary: Get subscription status
+      responses:
+        "200":
+          description: Subscription info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubscriptionResponse"
+
+  /tradie/billing-portal:
+    post:
+      operationId: createBillingPortalSession
+      tags: [tradies]
+      summary: Create Stripe Billing Portal session
+      responses:
+        "200":
+          description: Portal URL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BillingPortalResponse"
+
+  /tradie/licences:
+    get:
+      operationId: getMyLicences
+      tags: [tradies]
+      summary: Get current tradie's licences
+      responses:
+        "200":
+          description: Licences
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TradieLicence"
+
+  /tradie/licences/{licenceId}/resubmit:
+    post:
+      operationId: resubmitLicence
+      tags: [tradies]
+      summary: Resubmit a rejected or expired licence
+      parameters:
+        - name: licenceId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LicenceBody"
+      responses:
+        "200":
+          description: Resubmitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TradieLicence"
+
+  /tradie/portfolio:
+    post:
+      operationId: addPortfolioImage
+      tags: [tradies]
+      summary: Add a portfolio image
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PortfolioImageBody"
+      responses:
+        "201":
+          description: Image added
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PortfolioImage"
+
+  /tradie/portfolio/{imageId}:
+    delete:
+      operationId: deletePortfolioImage
+      tags: [tradies]
+      summary: Delete a portfolio image
+      parameters:
+        - name: imageId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
+
+  /tradie/stats:
+    get:
+      operationId: getTradieStats
+      tags: [tradies]
+      summary: Get tradie lead and response stats
+      responses:
+        "200":
+          description: Stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TradieStats"
+
+  # CUSTOMER
+  /customer/favourites:
+    get:
+      operationId: getFavourites
+      tags: [tradies]
+      summary: Get customer's saved tradies
+      responses:
+        "200":
+          description: Saved tradies
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TradieCard"
+
+  /customer/favourites/{tradieId}:
+    post:
+      operationId: addFavourite
+      tags: [tradies]
+      summary: Save a tradie
+      parameters:
+        - name: tradieId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Saved
+    delete:
+      operationId: removeFavourite
+      tags: [tradies]
+      summary: Remove a saved tradie
+      parameters:
+        - name: tradieId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Removed
+
+  # JOBS
+  /jobs:
+    get:
+      operationId: listJobs
+      tags: [jobs]
+      summary: List jobs for current user (tradie or customer)
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [ENQUIRY, ACCEPTED, IN_PROGRESS, COMPLETED, CANCELLED, DISPUTED]
+      responses:
+        "200":
+          description: Jobs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Job"
+    post:
+      operationId: createJob
+      tags: [jobs]
+      summary: Create a job enquiry (customer only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateJobBody"
+      responses:
+        "201":
+          description: Job created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Job"
+
+  /jobs/{jobId}:
+    get:
+      operationId: getJob
+      tags: [jobs]
+      summary: Get job details
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Job
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Job"
+
+  /jobs/{jobId}/accept:
+    post:
+      operationId: acceptJob
+      tags: [jobs]
+      summary: Accept a job enquiry (tradie only)
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Job accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Job"
+
+  /jobs/{jobId}/start:
+    post:
+      operationId: startJob
+      tags: [jobs]
+      summary: Mark job in progress (tradie only)
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Job started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Job"
+
+  /jobs/{jobId}/complete:
+    post:
+      operationId: completeJob
+      tags: [jobs]
+      summary: Mark job as complete
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Job completed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Job"
+
+  /jobs/{jobId}/cancel:
+    post:
+      operationId: cancelJob
+      tags: [jobs]
+      summary: Cancel a job
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CancelJobBody"
+      responses:
+        "200":
+          description: Job cancelled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Job"
+
+  /jobs/{jobId}/dispute:
+    post:
+      operationId: openDispute
+      tags: [jobs]
+      summary: Open a dispute on a job
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DisputeBody"
+      responses:
+        "201":
+          description: Dispute opened
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Dispute"
+
+  # MESSAGES
+  /jobs/{jobId}/messages:
+    get:
+      operationId: getMessages
+      tags: [messages]
+      summary: Get messages for a job thread
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Messages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Message"
+    post:
+      operationId: sendMessage
+      tags: [messages]
+      summary: Send a message in a job thread
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendMessageBody"
+      responses:
+        "201":
+          description: Message sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Message"
+
+  /inbox:
+    get:
+      operationId: getInbox
+      tags: [messages]
+      summary: Get inbox (all job threads with latest message)
+      responses:
+        "200":
+          description: Inbox threads
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/InboxThread"
+
+  # REVIEWS
+  /jobs/{jobId}/review:
+    post:
+      operationId: submitReview
+      tags: [reviews]
+      summary: Submit a review for a completed job (customer only)
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReviewBody"
+      responses:
+        "201":
+          description: Review submitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Review"
+
+  /tradies/{slug}/reviews:
+    get:
+      operationId: getTradieReviews
+      tags: [reviews]
+      summary: Get reviews for a tradie
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Reviews
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Review"
+
+  # ADMIN
+  /admin/dashboard:
+    get:
+      operationId: getAdminDashboard
+      tags: [admin]
+      summary: Admin dashboard metrics
+      responses:
+        "200":
+          description: Dashboard metrics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminDashboard"
+
+  /admin/verifications:
+    get:
+      operationId: listVerifications
+      tags: [admin]
+      summary: List licence verification queue
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [PENDING, VERIFIED, REJECTED, EXPIRED]
+      responses:
+        "200":
+          description: Verifications
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/VerificationItem"
+
+  /admin/verifications/{licenceId}/approve:
+    post:
+      operationId: approveLicence
+      tags: [admin]
+      summary: Approve a licence
+      parameters:
+        - name: licenceId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Approved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TradieLicence"
+
+  /admin/verifications/{licenceId}/reject:
+    post:
+      operationId: rejectLicence
+      tags: [admin]
+      summary: Reject a licence
+      parameters:
+        - name: licenceId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RejectBody"
+      responses:
+        "200":
+          description: Rejected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TradieLicence"
+
+  /admin/identity:
+    get:
+      operationId: listIdentityVerifications
+      tags: [admin]
+      summary: List identity verification queue
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [PENDING, VERIFIED, REJECTED]
+      responses:
+        "200":
+          description: Identity queue
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/IdentityVerificationItem"
+
+  /admin/identity/{tradieId}/approve:
+    post:
+      operationId: approveIdentity
+      tags: [admin]
+      summary: Approve identity
+      parameters:
+        - name: tradieId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Approved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TradieProfileResponse"
+
+  /admin/identity/{tradieId}/reject:
+    post:
+      operationId: rejectIdentity
+      tags: [admin]
+      summary: Reject identity
+      parameters:
+        - name: tradieId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RejectBody"
+      responses:
+        "200":
+          description: Rejected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TradieProfileResponse"
+
+  /admin/insurance:
+    get:
+      operationId: listInsuranceVerifications
+      tags: [admin]
+      summary: List insurance verification queue
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [PENDING, VERIFIED, REJECTED]
+      responses:
+        "200":
+          description: Insurance queue
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/InsuranceVerificationItem"
+
+  /admin/insurance/{tradieId}/approve:
+    post:
+      operationId: approveInsurance
+      tags: [admin]
+      summary: Approve insurance
+      parameters:
+        - name: tradieId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Approved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TradieProfileResponse"
+
+  /admin/insurance/{tradieId}/reject:
+    post:
+      operationId: rejectInsurance
+      tags: [admin]
+      summary: Reject insurance
+      parameters:
+        - name: tradieId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RejectBody"
+      responses:
+        "200":
+          description: Rejected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TradieProfileResponse"
+
+  /admin/tradies:
+    get:
+      operationId: adminListTradies
+      tags: [admin]
+      summary: Admin list all tradies
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Tradies
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdminTradieItem"
+
+  /admin/tradies/{tradieId}/suspend:
+    post:
+      operationId: suspendTradie
+      tags: [admin]
+      summary: Suspend a tradie
+      parameters:
+        - name: tradieId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SuspendBody"
+      responses:
+        "200":
+          description: Suspended
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TradieProfileResponse"
+
+  /admin/tradies/{tradieId}/reinstate:
+    post:
+      operationId: reinstateTradie
+      tags: [admin]
+      summary: Reinstate a suspended tradie
+      parameters:
+        - name: tradieId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Reinstated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TradieProfileResponse"
+
+  /admin/disputes:
+    get:
+      operationId: listDisputes
+      tags: [admin]
+      summary: List all disputes
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [OPEN, UNDER_REVIEW, RESOLVED, DISMISSED]
+      responses:
+        "200":
+          description: Disputes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Dispute"
+
+  /admin/disputes/{disputeId}/resolve:
+    post:
+      operationId: resolveDispute
+      tags: [admin]
+      summary: Resolve a dispute
+      parameters:
+        - name: disputeId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResolveDisputeBody"
+      responses:
+        "200":
+          description: Resolved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Dispute"
+
+  /admin/moderation/reviews:
+    get:
+      operationId: listFlaggedReviews
+      tags: [admin]
+      summary: List flagged reviews
+      responses:
+        "200":
+          description: Flagged reviews
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Review"
+
+  /admin/moderation/reviews/{reviewId}/remove:
+    post:
+      operationId: removeReview
+      tags: [admin]
+      summary: Remove a flagged review
+      parameters:
+        - name: reviewId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Removed
+
+  /admin/moderation/portfolio:
+    get:
+      operationId: listFlaggedPortfolioImages
+      tags: [admin]
+      summary: List flagged portfolio images
+      responses:
+        "200":
+          description: Flagged images
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PortfolioImage"
+
+  /admin/moderation/portfolio/{imageId}/remove:
+    post:
+      operationId: removePortfolioImage
+      tags: [admin]
+      summary: Remove a flagged portfolio image
+      parameters:
+        - name: imageId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Removed
+
+  # WEBHOOKS
+  /webhooks/stripe:
+    post:
+      operationId: stripeWebhook
+      tags: [webhooks]
+      summary: Stripe webhook handler
+      responses:
+        "200":
+          description: Processed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  # TRADES CONFIG
+  /config/trades:
+    get:
+      operationId: getTrades
+      tags: [tradies]
+      summary: Get available trade categories
+      responses:
+        "200":
+          description: Trade categories
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+
+    MessageResponse:
+      type: object
+      properties:
+        message:
+          type: string
+      required:
+        - message
+
+    SignupBody:
+      type: object
+      properties:
+        email:
+          type: string
+        password:
+          type: string
+        role:
+          type: string
+          enum: [TRADIE, CUSTOMER]
+        acceptedTerms:
+          type: boolean
+        acceptedPrivacy:
+          type: boolean
+      required:
+        - email
+        - password
+        - role
+        - acceptedTerms
+        - acceptedPrivacy
+
+    LoginBody:
+      type: object
+      properties:
+        email:
+          type: string
+        password:
+          type: string
+      required:
+        - email
+        - password
+
+    ForgotPasswordBody:
+      type: object
+      properties:
+        email:
+          type: string
+      required:
+        - email
+
+    ResetPasswordBody:
+      type: object
+      properties:
+        token:
+          type: string
+        password:
+          type: string
+      required:
+        - token
+        - password
+
+    AuthResponse:
+      type: object
+      properties:
+        user:
+          $ref: "#/components/schemas/UserInfo"
+      required:
+        - user
+
+    UserInfo:
+      type: object
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+          enum: [TRADIE, CUSTOMER, ADMIN]
+        emailVerifiedAt:
+          type: ["string", "null"]
+        tradieProfileId:
+          type: ["string", "null"]
+        tradieSlug:
+          type: ["string", "null"]
+        onboardingComplete:
+          type: boolean
+      required:
+        - id
+        - email
+        - role
+        - onboardingComplete
+
+    IdentityBody:
+      type: object
+      properties:
+        legalName:
+          type: string
+        dob:
+          type: string
+        mobile:
+          type: string
+        homeSuburb:
+          type: string
+        homeState:
+          type: string
+        abn:
+          type: string
+        identityDocUrl:
+          type: string
+      required:
+        - legalName
+        - dob
+        - mobile
+        - homeSuburb
+        - homeState
+        - abn
+
+    TradeInfoBody:
+      type: object
+      properties:
+        displayName:
+          type: string
+        bio:
+          type: string
+        trades:
+          type: array
+          items:
+            type: string
+        servicePostcodes:
+          type: array
+          items:
+            type: string
+        serviceRadiusKm:
+          type: ["integer", "null"]
+        hourlyRate:
+          type: number
+        yearsExp:
+          type: ["integer", "null"]
+      required:
+        - displayName
+        - bio
+        - trades
+        - servicePostcodes
+        - hourlyRate
+
+    AvailabilityBody:
+      type: object
+      properties:
+        availableEvenings:
+          type: boolean
+        availableWeekends:
+          type: boolean
+        availableDayMask:
+          type: integer
+      required:
+        - availableEvenings
+        - availableWeekends
+        - availableDayMask
+
+    LicenceBody:
+      type: object
+      properties:
+        trade:
+          type: string
+        isSelfDeclared:
+          type: boolean
+        licenceNumber:
+          type: ["string", "null"]
+        licenceClass:
+          type: ["string", "null"]
+        issuingState:
+          type: string
+        expiryDate:
+          type: ["string", "null"]
+        documentUrl:
+          type: ["string", "null"]
+      required:
+        - trade
+        - isSelfDeclared
+        - issuingState
+
+    InsuranceBody:
+      type: object
+      properties:
+        optedOut:
+          type: boolean
+        insurer:
+          type: ["string", "null"]
+        policyNumber:
+          type: ["string", "null"]
+        coverAud:
+          type: ["integer", "null"]
+        expiry:
+          type: ["string", "null"]
+        certUrl:
+          type: ["string", "null"]
+      required:
+        - optedOut
+
+    CheckoutBody:
+      type: object
+      properties:
+        plan:
+          type: string
+          enum: [monthly, annual]
+      required:
+        - plan
+
+    CheckoutResponse:
+      type: object
+      properties:
+        checkoutUrl:
+          type: string
+      required:
+        - checkoutUrl
+
+    BillingPortalResponse:
+      type: object
+      properties:
+        portalUrl:
+          type: string
+      required:
+        - portalUrl
+
+    UploadUrlBody:
+      type: object
+      properties:
+        fileType:
+          type: string
+        purpose:
+          type: string
+          enum: [identity, licence, insurance, portfolio, photo]
+      required:
+        - fileType
+        - purpose
+
+    UploadUrlResponse:
+      type: object
+      properties:
+        uploadUrl:
+          type: string
+        publicId:
+          type: string
+        signature:
+          type: string
+        timestamp:
+          type: integer
+        apiKey:
+          type: string
+        cloudName:
+          type: string
+      required:
+        - uploadUrl
+        - publicId
+        - signature
+        - timestamp
+        - apiKey
+        - cloudName
+
+    UpdateProfileBody:
+      type: object
+      properties:
+        displayName:
+          type: ["string", "null"]
+        bio:
+          type: ["string", "null"]
+        photo:
+          type: ["string", "null"]
+        hourlyRate:
+          type: ["number", "null"]
+        yearsExp:
+          type: ["integer", "null"]
+        availableEvenings:
+          type: ["boolean", "null"]
+        availableWeekends:
+          type: ["boolean", "null"]
+        availableDayMask:
+          type: ["integer", "null"]
+        servicePostcodes:
+          type: array
+          items:
+            type: string
+
+    SubscriptionResponse:
+      type: object
+      properties:
+        status:
+          type: string
+        plan:
+          type: ["string", "null"]
+        currentPeriodEnd:
+          type: ["string", "null"]
+        paymentConfirmed:
+          type: boolean
+      required:
+        - paymentConfirmed
+
+    TradieProfileResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+        slug:
+          type: string
+        legalName:
+          type: string
+        displayName:
+          type: string
+        bio:
+          type: string
+        photo:
+          type: ["string", "null"]
+        trades:
+          type: array
+          items:
+            type: string
+        homeSuburb:
+          type: string
+        homeState:
+          type: string
+        servicePostcodes:
+          type: array
+          items:
+            type: string
+        serviceRadiusKm:
+          type: ["integer", "null"]
+        hourlyRate:
+          type: number
+        yearsExp:
+          type: ["integer", "null"]
+        abn:
+          type: string
+        identityStatus:
+          type: string
+        insuranceStatus:
+          type: string
+        optedOutOfInsurance:
+          type: boolean
+        availableEvenings:
+          type: boolean
+        availableWeekends:
+          type: boolean
+        availableDayMask:
+          type: integer
+        isLive:
+          type: boolean
+        subscriptionStatus:
+          type: ["string", "null"]
+        paymentConfirmed:
+          type: boolean
+        suspendedAt:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+      required:
+        - id
+        - userId
+        - slug
+        - legalName
+        - displayName
+        - bio
+        - trades
+        - homeSuburb
+        - homeState
+        - servicePostcodes
+        - hourlyRate
+        - abn
+        - identityStatus
+        - insuranceStatus
+        - optedOutOfInsurance
+        - availableEvenings
+        - availableWeekends
+        - availableDayMask
+        - isLive
+        - paymentConfirmed
+        - createdAt
+
+    TradiePublicProfile:
+      type: object
+      properties:
+        id:
+          type: string
+        slug:
+          type: string
+        displayName:
+          type: string
+        bio:
+          type: string
+        photo:
+          type: ["string", "null"]
+        trades:
+          type: array
+          items:
+            type: string
+        homeSuburb:
+          type: string
+        homeState:
+          type: string
+        servicePostcodes:
+          type: array
+          items:
+            type: string
+        hourlyRate:
+          type: number
+        yearsExp:
+          type: ["integer", "null"]
+        availableEvenings:
+          type: boolean
+        availableWeekends:
+          type: boolean
+        identityVerified:
+          type: boolean
+        insuranceVerified:
+          type: boolean
+        optedOutOfInsurance:
+          type: boolean
+        avgRating:
+          type: ["number", "null"]
+        reviewCount:
+          type: integer
+        responseRatePct:
+          type: ["integer", "null"]
+        avgResponseMinutes:
+          type: ["integer", "null"]
+        licences:
+          type: array
+          items:
+            $ref: "#/components/schemas/PublicLicence"
+        portfolio:
+          type: array
+          items:
+            $ref: "#/components/schemas/PortfolioImage"
+      required:
+        - id
+        - slug
+        - displayName
+        - bio
+        - trades
+        - homeSuburb
+        - homeState
+        - servicePostcodes
+        - hourlyRate
+        - availableEvenings
+        - availableWeekends
+        - identityVerified
+        - insuranceVerified
+        - optedOutOfInsurance
+        - reviewCount
+        - licences
+        - portfolio
+
+    PublicLicence:
+      type: object
+      properties:
+        id:
+          type: string
+        trade:
+          type: string
+        licenceClass:
+          type: ["string", "null"]
+        issuingAuthority:
+          type: ["string", "null"]
+        issuingState:
+          type: string
+        expiryMonthYear:
+          type: ["string", "null"]
+        verificationStatus:
+          type: string
+        isSelfDeclared:
+          type: boolean
+      required:
+        - id
+        - trade
+        - issuingState
+        - verificationStatus
+        - isSelfDeclared
+
+    TradieLicence:
+      type: object
+      properties:
+        id:
+          type: string
+        tradieId:
+          type: string
+        trade:
+          type: string
+        licenceNumber:
+          type: ["string", "null"]
+        licenceClass:
+          type: ["string", "null"]
+        issuingAuthority:
+          type: ["string", "null"]
+        issuingState:
+          type: string
+        expiryDate:
+          type: ["string", "null"]
+        documentUrl:
+          type: ["string", "null"]
+        verificationStatus:
+          type: string
+        verifiedAt:
+          type: ["string", "null"]
+        rejectionReason:
+          type: ["string", "null"]
+        isSelfDeclared:
+          type: boolean
+        createdAt:
+          type: string
+      required:
+        - id
+        - tradieId
+        - trade
+        - issuingState
+        - verificationStatus
+        - isSelfDeclared
+        - createdAt
+
+    TradieCard:
+      type: object
+      properties:
+        id:
+          type: string
+        slug:
+          type: string
+        displayName:
+          type: string
+        photo:
+          type: ["string", "null"]
+        trades:
+          type: array
+          items:
+            type: string
+        homeSuburb:
+          type: string
+        homeState:
+          type: string
+        hourlyRate:
+          type: number
+        availableEvenings:
+          type: boolean
+        availableWeekends:
+          type: boolean
+        identityVerified:
+          type: boolean
+        insuranceVerified:
+          type: boolean
+        avgRating:
+          type: ["number", "null"]
+        reviewCount:
+          type: integer
+      required:
+        - id
+        - slug
+        - displayName
+        - trades
+        - homeSuburb
+        - homeState
+        - hourlyRate
+        - availableEvenings
+        - availableWeekends
+        - identityVerified
+        - insuranceVerified
+        - reviewCount
+
+    TradieListResponse:
+      type: object
+      properties:
+        tradies:
+          type: array
+          items:
+            $ref: "#/components/schemas/TradieCard"
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+      required:
+        - tradies
+        - total
+        - page
+        - limit
+
+    TradieStats:
+      type: object
+      properties:
+        totalJobs:
+          type: integer
+        activeJobs:
+          type: integer
+        completedJobs:
+          type: integer
+        avgResponseMinutes:
+          type: ["integer", "null"]
+        responseRatePct:
+          type: ["integer", "null"]
+      required:
+        - totalJobs
+        - activeJobs
+        - completedJobs
+
+    PortfolioImage:
+      type: object
+      properties:
+        id:
+          type: string
+        url:
+          type: string
+        caption:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+      required:
+        - id
+        - url
+        - createdAt
+
+    PortfolioImageBody:
+      type: object
+      properties:
+        url:
+          type: string
+        caption:
+          type: ["string", "null"]
+      required:
+        - url
+
+    Job:
+      type: object
+      properties:
+        id:
+          type: string
+        tradieId:
+          type: string
+        customerId:
+          type: string
+        status:
+          type: string
+          enum: [ENQUIRY, ACCEPTED, IN_PROGRESS, COMPLETED, CANCELLED, DISPUTED]
+        description:
+          type: string
+        postcode:
+          type: string
+        preferredStart:
+          type: ["string", "null"]
+        preferredEnd:
+          type: ["string", "null"]
+        acceptedAt:
+          type: ["string", "null"]
+        completedAt:
+          type: ["string", "null"]
+        cancelledAt:
+          type: ["string", "null"]
+        cancelledReason:
+          type: ["string", "null"]
+        tradie:
+          $ref: "#/components/schemas/TradieCard"
+        customer:
+          $ref: "#/components/schemas/CustomerInfo"
+        review:
+          allOf:
+            - $ref: "#/components/schemas/Review"
+          nullable: true
+        unreadCount:
+          type: integer
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required:
+        - id
+        - tradieId
+        - customerId
+        - status
+        - description
+        - postcode
+        - tradie
+        - customer
+        - unreadCount
+        - createdAt
+        - updatedAt
+
+    CustomerInfo:
+      type: object
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+      required:
+        - id
+        - email
+
+    CreateJobBody:
+      type: object
+      properties:
+        tradieId:
+          type: string
+        description:
+          type: string
+        postcode:
+          type: string
+        preferredStart:
+          type: ["string", "null"]
+        preferredEnd:
+          type: ["string", "null"]
+      required:
+        - tradieId
+        - description
+        - postcode
+
+    CancelJobBody:
+      type: object
+      properties:
+        reason:
+          type: string
+      required:
+        - reason
+
+    DisputeBody:
+      type: object
+      properties:
+        reason:
+          type: string
+      required:
+        - reason
+
+    Message:
+      type: object
+      properties:
+        id:
+          type: string
+        jobId:
+          type: string
+        senderId:
+          type: string
+        body:
+          type: string
+        readAt:
+          type: ["string", "null"]
+        flagged:
+          type: boolean
+        createdAt:
+          type: string
+      required:
+        - id
+        - jobId
+        - senderId
+        - body
+        - flagged
+        - createdAt
+
+    SendMessageBody:
+      type: object
+      properties:
+        body:
+          type: string
+      required:
+        - body
+
+    InboxThread:
+      type: object
+      properties:
+        job:
+          $ref: "#/components/schemas/Job"
+        lastMessage:
+          $ref: "#/components/schemas/Message"
+        unreadCount:
+          type: integer
+      required:
+        - job
+        - unreadCount
+
+    Review:
+      type: object
+      properties:
+        id:
+          type: string
+        jobId:
+          type: string
+        tradieId:
+          type: string
+        customerId:
+          type: string
+        rating:
+          type: integer
+        comment:
+          type: ["string", "null"]
+        flagged:
+          type: boolean
+        createdAt:
+          type: string
+      required:
+        - id
+        - jobId
+        - tradieId
+        - customerId
+        - rating
+        - flagged
+        - createdAt
+
+    ReviewBody:
+      type: object
+      properties:
+        rating:
+          type: integer
+        comment:
+          type: ["string", "null"]
+      required:
+        - rating
+
+    Dispute:
+      type: object
+      properties:
+        id:
+          type: string
+        jobId:
+          type: string
+        tradieId:
+          type: string
+        raisedById:
+          type: string
+        reason:
+          type: string
+        status:
+          type: string
+          enum: [OPEN, UNDER_REVIEW, RESOLVED, DISMISSED]
+        resolution:
+          type: ["string", "null"]
+        resolvedAt:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+      required:
+        - id
+        - jobId
+        - tradieId
+        - raisedById
+        - reason
+        - status
+        - createdAt
+
+    ResolveDisputeBody:
+      type: object
+      properties:
+        resolution:
+          type: string
+        status:
+          type: string
+          enum: [RESOLVED, DISMISSED]
+      required:
+        - resolution
+        - status
+
+    RejectBody:
+      type: object
+      properties:
+        reason:
+          type: string
+      required:
+        - reason
+
+    SuspendBody:
+      type: object
+      properties:
+        reason:
+          type: string
+      required:
+        - reason
+
+    AdminDashboard:
+      type: object
+      properties:
+        mrr:
+          type: number
+        activeTradies:
+          type: integer
+        pendingVerifications:
+          type: integer
+        expiredLicences:
+          type: integer
+        expiredInsurance:
+          type: integer
+        openDisputes:
+          type: integer
+        jobsLast30d:
+          type: integer
+        tradiesLast30d:
+          type: integer
+      required:
+        - mrr
+        - activeTradies
+        - pendingVerifications
+        - expiredLicences
+        - expiredInsurance
+        - openDisputes
+        - jobsLast30d
+        - tradiesLast30d
+
+    VerificationItem:
+      type: object
+      properties:
+        licenceId:
+          type: string
+        tradieId:
+          type: string
+        tradieName:
+          type: string
+        trade:
+          type: string
+        licenceClass:
+          type: ["string", "null"]
+        licenceNumber:
+          type: ["string", "null"]
+        issuingState:
+          type: string
+        issuingAuthority:
+          type: ["string", "null"]
+        documentUrl:
+          type: ["string", "null"]
+        status:
+          type: string
+        submittedAt:
+          type: string
+      required:
+        - licenceId
+        - tradieId
+        - tradieName
+        - trade
+        - issuingState
+        - status
+        - submittedAt
+
+    IdentityVerificationItem:
+      type: object
+      properties:
+        tradieId:
+          type: string
+        tradieName:
+          type: string
+        identityDocUrl:
+          type: ["string", "null"]
+        identityStatus:
+          type: string
+        submittedAt:
+          type: string
+      required:
+        - tradieId
+        - tradieName
+        - identityStatus
+        - submittedAt
+
+    InsuranceVerificationItem:
+      type: object
+      properties:
+        tradieId:
+          type: string
+        tradieName:
+          type: string
+        insurer:
+          type: ["string", "null"]
+        coverAud:
+          type: ["integer", "null"]
+        expiry:
+          type: ["string", "null"]
+        certUrl:
+          type: ["string", "null"]
+        insuranceStatus:
+          type: string
+        submittedAt:
+          type: string
+      required:
+        - tradieId
+        - tradieName
+        - insuranceStatus
+        - submittedAt
+
+    AdminTradieItem:
+      type: object
+      properties:
+        id:
+          type: string
+        slug:
+          type: string
+        displayName:
+          type: string
+        email:
+          type: string
+        trades:
+          type: array
+          items:
+            type: string
+        homeState:
+          type: string
+        isLive:
+          type: boolean
+        identityStatus:
+          type: string
+        insuranceStatus:
+          type: string
+        subscriptionStatus:
+          type: ["string", "null"]
+        suspendedAt:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+      required:
+        - id
+        - slug
+        - displayName
+        - email
+        - trades
+        - homeState
+        - isLive
+        - identityStatus
+        - insuranceStatus
+        - createdAt

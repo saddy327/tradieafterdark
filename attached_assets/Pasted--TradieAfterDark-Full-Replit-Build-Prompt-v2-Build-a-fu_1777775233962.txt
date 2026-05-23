@@ -1,0 +1,625 @@
+
+# TradieAfterDark — Full Replit Build Prompt (v2)
+
+Build a full-stack web application called **TradieAfterDark** — a subscription-based marketplace connecting busy professionals who need after-hours trade services with tradies looking to take on work outside standard business hours.
+
+The domain is `tradieafterdark.com`. The brand tone is bold, dark, and no-nonsense — built for people who get things done when others are asleep. Trust, verification, and licensing rigour are the product's competitive moat. Every design decision should reinforce that.
+
+---
+
+## POSITIONING
+
+**Supply side:** Qualified, fully licensed trade contractors who already operate (or are eligible to operate) their own ABN-registered side work and want a clean channel for after-hours leads. Not apprentices. Not unlicensed workers.
+
+**Demand side:** Time-poor professionals, landlords, and small business owners who need trade work done outside of 9–5 and are willing to pay a small premium for after-hours availability and verified credentials.
+
+**The promise to customers:** *"Every tradie on this platform is licence-verified, ID-verified. We've checked, so you don't have to."*
+
+---
+
+## TECH STACK
+
+- **Frontend:** React + TypeScript + Vite + Tailwind CSS
+- **Backend:** Node.js + Express + TypeScript
+- **Database:** PostgreSQL (via Prisma ORM) — provision with PostGIS extension enabled from day one for future geo search
+- **Auth:** JWT access tokens (15 min) + rotating refresh tokens (30 days), both in httpOnly cookies. CSRF token via double-submit pattern.
+- **Payments:** Stripe (subscriptions, billing portal, webhook idempotency table)
+- **File Storage:** Cloudinary using **signed upload presets** — never expose API secret to the client
+- **Email:** Postmark (transactional) — Nodemailer/SMTP only as a local-dev fallback. SPF, DKIM, DMARC configured before launch.
+- **Scheduling:** node-cron for licence expiry and job-completion review prompts
+- **Deployment-ready:** `.env` config, seed script, full README
+
+---
+
+## BRAND & DESIGN
+
+- **Colours:** Deep charcoal (`#0D0D0D`), electric orange (`#FF6B00`), off-white (`#F5F5F5`)
+- **Logo:** "TradieAfterDark" wordmark with crescent moon + spanner icon
+- **Fonts:** Inter for body, Bebas Neue or Oswald for headings
+- **Accessibility:** WCAG 2.2 AA baseline. All colour combinations must meet contrast ratios. All interactive elements keyboard-navigable. All form inputs labelled. All images have alt text.
+- **Vibe:** Dark mode first, premium trade marketplace — Airtasker meets LinkedIn for after-hours work
+
+---
+
+## USER ROLES
+
+### 1. Tradie (Service Provider)
+- Pays a monthly or annual subscription to be listed
+- Must complete licence verification, ID verification, and insurance declaration before going live
+- Manages leads in-platform (messaging stays on-platform until both parties exchange contact details)
+- Keeps 100% of what they charge — TradieAfterDark takes no commission
+- Can mark themselves as available/unavailable on a per-day basis
+
+### 2. Customer (Service Seeker)
+- Free to sign up and browse
+- Searches tradies by trade, suburb/postcode (with radius), and availability
+- Books jobs through the platform — every job has a lifecycle the platform tracks
+- Leaves reviews **only on completed jobs they actually booked** (one review per completed job)
+
+### 3. Admin (Internal)
+- Verification queue management (licence + ID + insurance)
+- Subscription and account management
+- Complaints and dispute moderation
+- Revenue and operational dashboards
+- Admin accounts are seeded only — no public admin signup
+
+---
+
+## KEY PAGES & FEATURES
+
+### Public / Marketing
+
+**Homepage** — Hero with tagline *"When the sun goes down, we get to work."* Three-step "How it works", featured trades, trust strip showing the verification process (ID + Licence + Insurance), customer testimonials section (placeholder), tradie acquisition CTA.
+
+**Browse Tradies** — Search bar (trade + postcode), filters (evenings / weekends / both,) Only profiles where `isLive === true` are listed. Paginated, mobile-first.
+
+**Pricing page** — see Stripe section.
+
+**Trust & Verification page** — explains exactly how verification works. This is marketing for the moat.
+
+### Auth
+
+- **/signup** — Two paths: "I need a tradie" (customer) and "I am a tradie" (subscribe + list).
+- **/login** — Email + password with forgot-password flow (rate-limited, single-use signed tokens, 1-hour expiry).
+- Refresh token rotation: every refresh issues a new refresh token and invalidates the previous one. Reuse of an invalidated refresh token revokes the entire family.
+
+### Tradie Onboarding (multi-step)
+
+1. **Identity** — full legal name, DOB, mobile, residential suburb/state, ABN (required — entered, validated against ABN format, ABN status checked via the public ABN Lookup API where possible). Upload of government-issued photo ID (driver's licence or passport).
+2. **Trade & service area** — trade category (dropdown). Service postcodes (multi-select) with optional radius from a central postcode. Hourly rate, bio, years of experience.
+3. **Availability** — evenings / weekends / both, plus a per-day-of-week toggle.
+4. **Licence** — for licensed trades: licence number, licence class, issuing state (drives the issuing authority via server-side `STATE_AUTHORITY_MAP`), expiry date, document upload (PDF/image, max 5MB, signed Cloudinary upload). Multiple licences can be added if the tradie offers multiple licensed trades — each licence is verified independently. For unlicensed trades, a Statutory Declaration checkbox replaces the licence form.
+5. **Insurance** — public liability insurance details: insurer name, policy number, cover amount (minimum $1M recommended), expiry date, certificate of currency upload. **A tradie can list without insurance, but their public profile will display "Not insured" prominently and they cannot be marked "Verified".**
+6. **Subscription checkout** — Stripe Checkout.
+
+A profile only goes live when **all** of the following are true:
+- Payment confirmed (Stripe webhook)
+- ID verified by admin
+- Every claimed licensed trade has `verificationStatus = VERIFIED` (or `SELF_DECLARED` for unlicensed trades)
+- Insurance is either VERIFIED or the tradie has explicitly opted in to listing without insurance
+
+After step 6 the tradie sees: *"Your application is under review. We verify ID, licence, and insurance within 1 business day. We'll email you when you're live."*
+
+### Tradie Dashboard
+
+- Editable public profile
+- Subscription status (plan, next bill date, billing portal link)
+- Verification status banner per artefact (ID, each licence, insurance)
+- **Inbox** — in-app messaging with customers, threaded by job
+- **Jobs** — list with status (Enquiry / Accepted / In Progress / Completed / Cancelled / Disputed)
+- Availability toggles
+- Resubmit flow for rejected/expired licences and insurance
+- Lead-response metrics visible to the tradie (avg response time, response rate) — these feed into search ranking
+
+### Customer Dashboard
+
+- Saved/favourited tradies
+- Active and past jobs (with status)
+- Messaging inbox (threaded by job)
+- Review prompts on completed jobs
+
+### Tradie Public Profile (`/tradie/:slug`)
+
+- Photo, display name, trade(s), service area, hourly rate, availability
+- **Trust badges** — orange "Verified ✓" badge per verified licence class (e.g. "⚡ Licensed Electrician — QBCC Verified"), grey "Self-Declared" badge for unlicensed trades, green "Insured ✓" badge if insurance verified
+- Licence expiry shown as month/year only — raw licence number never publicly displayed
+- Insurance expiry shown as month/year — raw policy number never publicly displayed
+- Portfolio photos (up to 8, moderated)
+- Star rating + reviews (only from completed jobs)
+- **"Request a Job" button** — opens a structured job request form (description, preferred date window, address postcode, photos optional) which creates a `Job` record in `ENQUIRY` status and starts a message thread
+
+### Pricing (`/pricing`)
+
+- **Monthly:** $49/month
+- **Annual:** $412/year (30% saving — show crossed-out $588)
+- Both include: full verified profile, unlimited leads, in-app messaging, 100% of earnings, availability controls, portfolio, priority support badge
+
+> **Pricing note for the founder:** A pure subscription model creates a churn risk in slow months. Strongly consider a hybrid (lower base + small per-lead unlock fee) once you have 3 months of data. The schema below supports this — `Job` has the hooks needed without rework.
+
+### Admin Panel (`/admin`)
+
+**`/admin/dashboard`** — MRR, active tradies, pending verifications (alert badge), expired licences, expired insurance, open disputes, jobs in last 30d.
+
+**`/admin/verifications`** — Tabs for Pending / Approved / Rejected / Expired. Each verification record shows submitted artefacts inline, a deep link to the relevant state authority's public register pre-filled with the licence number where the URL pattern allows, and Approve / Reject actions. Reject opens a modal for a reason (sent to tradie via email).
+
+**`/admin/identity`** — ID verification queue (separate from licence). Side-by-side: uploaded ID document and the user's claimed name/DOB. Approve only if they match.
+
+**`/admin/insurance`** — Insurance certificate review queue.
+
+**`/admin/tradies`** — All tradie accounts, search/filter, manual suspend/reinstate, soft-delete.
+
+**`/admin/disputes`** — Customer complaints and dispute resolution workflow. See Dispute model below.
+
+**`/admin/moderation`** — Portfolio image and review content moderation queue (flagged items only).
+
+---
+
+## STRIPE INTEGRATION
+
+- Two products on setup: `monthly_plan` ($49/month), `annual_plan` ($412/year)
+- Onboarding step 6 redirects to Stripe Checkout
+- Webhook handler at `/api/webhooks/stripe`:
+  - **Idempotency:** every event ID is recorded in a `StripeWebhookEvent` table on first processing. Duplicates are no-ops.
+  - `checkout.session.completed` → mark payment confirmed; trigger live-eligibility check
+  - `customer.subscription.deleted` / `customer.subscription.paused` → set `isLive = false`
+  - `invoice.payment_failed` → email tradie, flag account, set `isLive = false` after grace period (7 days)
+  - `customer.subscription.updated` → sync `subscriptionStatus`
+- **Refund policy on rejected verification:** if a tradie pays but is rejected at verification, they get one free resubmission window (14 days). If they don't resubmit or fail again, the subscription is cancelled and prorated refund issued via Stripe. This must be documented in the ToS and surfaced in the rejection email.
+- Tradie dashboard links to Stripe Customer Portal for self-service billing
+
+---
+
+## TRADIE LICENCE VERIFICATION SYSTEM
+
+### Australian Licensing Authorities by State
+
+| State | Authority | Public Search URL |
+|---|---|---|
+| QLD | QBCC | qbcc.qld.gov.au/licensing-certification/search-qbcc-licence-register |
+| NSW | NSW Fair Trading | onlineregistry.fairtrading.nsw.gov.au |
+| VIC | VBA | vba.vic.gov.au/tools/licence-register |
+| SA | CBS | cbs.sa.gov.au/resources/licence-register |
+| WA | Building Commission WA | buildingcommission.wa.gov.au/licence-register |
+| TAS | CBOS | cbos.tas.gov.au |
+| ACT | Access Canberra | accesscanberra.act.gov.au |
+| NT | NT Building Advisory Services | nt.gov.au/industry |
+
+Federal: ARCtick (refrigerant handling) — `arctick.org` — required in addition to state HVAC licence.
+
+Store the authority name and lookup URL pattern per state in `STATE_AUTHORITY_MAP` server-side.
+
+### Trade-to-Licence Map (Per State)
+
+The mapping is keyed by **(state, trade)** because licence classes vary materially across states. Treat the structure below as the canonical shape — populate authoritative values during build by checking each state authority directly.
+
+```typescript
+// server/config/licenceMap.ts
+type LicenceRequirement = {
+  authority: string;
+  licenceClassOptions: string[]; // valid licence class strings for this state+trade
+  unlicensedThresholdAud?: number; // dollar threshold below which no licence is required
+  requiresInsurance: boolean;
+};
+
+const LICENCE_MAP: Record<State, Record<Trade, LicenceRequirement>> = {
+  QLD: {
+    Electrician: { authority: "QBCC + Electrical Safety Office", licenceClassOptions: ["Electrical Contractor", "Electrical Worker (with QBCC contractor licence)"], requiresInsurance: true },
+    Plumber:     { authority: "QBCC", licenceClassOptions: ["Plumbing & Drainage Contractor"], requiresInsurance: true },
+    Builder:     { authority: "QBCC", licenceClassOptions: ["Builder - Low Rise", "Builder - Medium Rise", "Builder - Open"], requiresInsurance: true },
+    // ... etc
+    Handyman:    { authority: "None below threshold", licenceClassOptions: [], unlicensedThresholdAud: 3300, requiresInsurance: false },
+  },
+  NSW: {
+    Handyman:    { authority: "None below threshold", licenceClassOptions: [], unlicensedThresholdAud: 5000, requiresInsurance: false },
+    // ... etc
+  },
+  // ... all states
+};
+```
+
+**Server-side enforcement rule:** A tradie can only list under trade categories that match a `VERIFIED` licence (or are explicitly unlicensed in their state). Adding a trade without a matching verified licence is rejected at the API layer with a 403, regardless of what the frontend allows. This is also covered by the `ProfileChangeLog` model below.
+
+### Identity Verification
+
+Separate from licence verification. Admin reviews the uploaded ID document and confirms:
+1. The document is genuine on its face (not obviously photoshopped)
+2. The name on the ID matches the name on the licence
+3. The name on the ID matches the account holder
+
+Without ID verification, "verified" only proves a licence exists — not that this user holds it.
+
+### Insurance Verification
+
+Admin reviews uploaded certificate of currency, confirms insurer, policy number, cover amount, and expiry. A tradie's `insuranceVerificationStatus` is independent of licence status.
+
+### Cron Jobs (daily, `Australia/Brisbane` TZ)
+
+- Licences expiring in 30 days → warn tradie via email
+- Licences expired → set status `EXPIRED`, set `isLive = false`, email tradie
+- Insurance certificates expiring in 30 days → warn tradie
+- Insurance expired → strip "Insured ✓" badge, email tradie (does not auto-take-down profile, but flags it)
+- Jobs marked `IN_PROGRESS` for >14 days → prompt customer to mark complete or open dispute
+- Jobs marked `COMPLETED` >24h ago without review → send review prompt
+
+### Statutory Declaration (Unlicensed Trades)
+
+For unlicensed trade types in the relevant state:
+- Replace licence upload with a checkbox + timestamp + IP capture: *"I declare that the services I am offering do not require a contractor's licence under applicable Australian law in [STATE] and that I am legally permitted to carry out this work."*
+- Status set to `SELF_DECLARED`, auto-approved, no admin review
+- Public profile shows grey "Self-Declared" badge — visually distinct from orange "Verified"
+- Admin can flag and remove on complaint
+
+---
+
+## DATABASE SCHEMA (Prisma)
+
+```prisma
+model User {
+  id                  String    @id @default(uuid())
+  email               String    @unique
+  passwordHash        String
+  role                Role      @default(CUSTOMER)
+  emailVerifiedAt     DateTime?
+  acceptedTermsAt     DateTime?
+  acceptedPrivacyAt   DateTime?
+  deletedAt           DateTime? // soft delete
+  createdAt           DateTime  @default(now())
+  profile             TradieProfile?
+  reviewsWritten      Review[]  @relation("CustomerReviews")
+  jobsAsCustomer      Job[]     @relation("CustomerJobs")
+  refreshTokens       RefreshToken[]
+}
+
+enum Role {
+  TRADIE
+  CUSTOMER
+  ADMIN
+}
+
+model RefreshToken {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  tokenHash   String   @unique
+  familyId    String   // for reuse-detection revocation
+  revokedAt   DateTime?
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+  @@index([familyId])
+}
+
+model TradieProfile {
+  id                       String             @id @default(uuid())
+  userId                   String             @unique
+  user                     User               @relation(fields: [userId], references: [id])
+  slug                     String             @unique
+  legalName                String
+  displayName              String
+  bio                      String
+  photo                    String?
+  trades                   String[]           // only writable when matching verified licence exists
+  homeSuburb               String
+  homeState                String
+  servicePostcodes         String[]
+  serviceRadiusKm          Int?
+  centralLat               Float?             // for future PostGIS proximity
+  centralLng               Float?
+  hourlyRate               Float
+  yearsExp                 Int?
+  abn                      String
+  abnVerifiedAt            DateTime?
+  identityStatus           VerificationStatus @default(PENDING)
+  identityDocUrl           String?
+  insuranceStatus          VerificationStatus @default(PENDING)
+  insuranceInsurer         String?
+  insurancePolicyNumber    String?
+  insuranceCoverAud        Int?
+  insuranceExpiry          DateTime?
+  insuranceCertUrl         String?
+  optedOutOfInsurance      Boolean            @default(false)
+  availableEvenings        Boolean            @default(false)
+  availableWeekends        Boolean            @default(false)
+  availableDayMask         Int                @default(0) // bitmask Mon=1..Sun=64
+  isLive                   Boolean            @default(false)
+  stripeCustomerId         String?
+  stripeSubscriptionId     String?
+  subscriptionStatus       String?
+  paymentConfirmed         Boolean            @default(false)
+  responseRatePct          Int?               // computed
+  avgResponseMinutes       Int?               // computed
+  suspendedAt              DateTime?
+  suspendedReason          String?
+  deletedAt                DateTime?          // soft delete
+  createdAt                DateTime           @default(now())
+  portfolio                PortfolioImage[]
+  licences                 TradieLicence[]    // ONE-TO-MANY
+  jobs                     Job[]
+  reviews                  Review[]
+  changeLogs               ProfileChangeLog[]
+  disputes                 Dispute[]
+}
+
+enum VerificationStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+  EXPIRED
+  SELF_DECLARED
+}
+
+model TradieLicence {
+  id                  String              @id @default(uuid())
+  tradieId            String
+  tradie              TradieProfile       @relation(fields: [tradieId], references: [id])
+  trade               String              // matches a Trade key in licence map
+  licenceNumber       String?
+  licenceClass        String?
+  issuingAuthority    String?
+  issuingState        String
+  expiryDate          DateTime?
+  documentUrl         String?
+  verificationStatus  VerificationStatus  @default(PENDING)
+  verifiedAt          DateTime?
+  verifiedByAdminId   String?
+  rejectionReason     String?
+  isSelfDeclared      Boolean             @default(false)
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  verificationLogs    AdminVerificationLog[]
+
+  @@unique([tradieId, trade]) // one licence per trade per tradie
+}
+
+model AdminVerificationLog {
+  id         String        @id @default(uuid())
+  licenceId  String
+  licence    TradieLicence @relation(fields: [licenceId], references: [id])
+  adminId    String
+  action     String         // APPROVED | REJECTED | EXPIRED
+  note       String?
+  createdAt  DateTime      @default(now())
+}
+
+model ProfileChangeLog {
+  id         String        @id @default(uuid())
+  tradieId   String
+  tradie    TradieProfile  @relation(fields: [tradieId], references: [id])
+  field     String
+  oldValue  String?
+  newValue  String?
+  actorId   String         // user who made the change
+  createdAt DateTime       @default(now())
+}
+
+model PortfolioImage {
+  id         String         @id @default(uuid())
+  tradieId   String
+  tradie     TradieProfile  @relation(fields: [tradieId], references: [id])
+  url        String
+  caption    String?
+  flagged    Boolean        @default(false)
+  removedAt  DateTime?
+  createdAt  DateTime       @default(now())
+}
+
+model Job {
+  id              String     @id @default(uuid())
+  tradieId        String
+  tradie          TradieProfile @relation(fields: [tradieId], references: [id])
+  customerId      String
+  customer        User       @relation("CustomerJobs", fields: [customerId], references: [id])
+  status          JobStatus  @default(ENQUIRY)
+  description     String
+  postcode        String
+  preferredStart  DateTime?
+  preferredEnd    DateTime?
+  acceptedAt      DateTime?
+  completedAt     DateTime?
+  cancelledAt     DateTime?
+  cancelledReason String?
+  messages        Message[]
+  review          Review?
+  dispute         Dispute?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  @@index([tradieId, status])
+  @@index([customerId, status])
+}
+
+enum JobStatus {
+  ENQUIRY
+  ACCEPTED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  DISPUTED
+}
+
+model Message {
+  id         String   @id @default(uuid())
+  jobId      String
+  job        Job      @relation(fields: [jobId], references: [id])
+  senderId   String
+  body       String
+  readAt     DateTime?
+  flagged    Boolean  @default(false) // contact-info leak detection
+  createdAt  DateTime @default(now())
+  @@index([jobId, createdAt])
+}
+
+model Review {
+  id         String        @id @default(uuid())
+  jobId      String        @unique // one review per completed job
+  job        Job           @relation(fields: [jobId], references: [id])
+  tradieId   String
+  tradie     TradieProfile @relation(fields: [tradieId], references: [id])
+  customerId String
+  customer   User          @relation("CustomerReviews", fields: [customerId], references: [id])
+  rating     Int           // 1..5
+  comment    String?
+  flagged    Boolean       @default(false)
+  removedAt  DateTime?
+  createdAt  DateTime      @default(now())
+  @@unique([customerId, tradieId]) // belt-and-braces: one review per customer-tradie pair
+}
+
+model Dispute {
+  id          String       @id @default(uuid())
+  jobId       String       @unique
+  job         Job          @relation(fields: [jobId], references: [id])
+  tradieId    String
+  tradie      TradieProfile @relation(fields: [tradieId], references: [id])
+  raisedById  String        // user id of raiser
+  reason      String
+  status      DisputeStatus @default(OPEN)
+  resolution  String?
+  resolvedAt  DateTime?
+  createdAt   DateTime      @default(now())
+}
+
+enum DisputeStatus {
+  OPEN
+  UNDER_REVIEW
+  RESOLVED
+  DISMISSED
+}
+
+model StripeWebhookEvent {
+  id           String   @id // Stripe event id, used for idempotency
+  type         String
+  payload      Json
+  processedAt  DateTime @default(now())
+}
+```
+
+---
+
+## IN-APP MESSAGING & JOB LIFECYCLE
+
+The platform retains conversation context until both parties have a structured reason to take it off-platform.
+
+- Customer creates a job request → status `ENQUIRY`, message thread starts
+- Tradie can accept → status `ACCEPTED`, contact details revealed to both parties in a structured "contact card" within the thread
+- Tradie marks `IN_PROGRESS` when work begins
+- Either party marks `COMPLETED`; the other confirms within 7 days or it auto-confirms
+- Review prompt fires 24h after completion
+- Either party can open a `Dispute` at any post-`ENQUIRY` status
+
+**Contact-info leak detection in messages (pre-acceptance):** before `ACCEPTED`, run a regex pre-flight on outbound messages for phone numbers / emails / "WhatsApp me" patterns. Don't block — flag for moderation and show a soft warning to the sender: *"You can share contact details once you've accepted this job."* The point isn't to police adults; it's to keep enough data on-platform that ranking and reviews work.
+
+---
+
+## EMAIL NOTIFICATIONS
+
+| Trigger | Recipient | Subject |
+|---|---|---|
+| Tradie signup complete | Tradie | "Welcome to TradieAfterDark — your application is in" |
+| ID submitted | Admin | "New ID verification: [Tradie Name]" |
+| Licence submitted | Admin | "New licence verification: [Tradie Name] — [Trade]" |
+| Insurance submitted | Admin | "New insurance verification: [Tradie Name]" |
+| All artefacts received | Tradie | "We've got everything — verification within 1 business day" |
+| Verification approved (per artefact) | Tradie | "Your [licence/ID/insurance] is approved" |
+| Tradie fully live | Tradie | "You're live on TradieAfterDark 🟠" |
+| Verification rejected | Tradie | "Action required: Your [artefact] verification was unsuccessful" |
+| New job enquiry | Tradie | "New lead from [Customer Name]" |
+| Job accepted | Customer | "[Tradie Name] accepted your job" |
+| Job completed prompt | Customer | "Did [Tradie Name] finish the job?" |
+| Review prompt | Customer | "How was your experience with [Tradie Name]?" |
+| Licence expiring 30d | Tradie | "Renew your licence to stay listed" |
+| Licence expired | Tradie | "Your profile has been paused — licence expired" |
+| Insurance expiring 30d | Tradie | "Renew your insurance to keep your Insured badge" |
+| Payment failed | Tradie | "Action required: Payment failed — your listing may be paused" |
+| Dispute opened | Both parties + Admin | "A dispute has been opened on job #[X]" |
+
+---
+
+## SECURITY, COMPLIANCE, OPERATIONAL
+
+- **Rate limiting** on: signup, login, password reset, enquiry/job creation, message send, Stripe webhook, admin endpoints. Use a sliding window via Redis (or in-memory for MVP, swap later).
+- **Input validation** server-side using Zod schemas shared with the client where possible. Sanitise all rich-text fields. Strip EXIF from uploaded images.
+- **Raw licence numbers, raw insurance policy numbers, raw ABNs** are never returned by any public endpoint — only to the owner and admins.
+- **Australian Privacy Act compliance:** capture consent timestamps, provide a data export endpoint and a data deletion request flow (soft-delete with 30-day retention before hard delete).
+- **Cloudinary uploads** use signed presets generated server-side per request. Never embed the API secret in the client.
+- **CSRF protection** via double-submit cookie pattern on all state-changing requests.
+- **Audit log** every admin action (verification decision, suspension, dispute resolution).
+- **Soft-delete** on `User`, `TradieProfile`, `PortfolioImage`, `Review` — never hard-delete records that may be needed for record-keeping.
+- **Slug strategy:** generate from displayName, lowercase, hyphenate. On collision, append a 4-char random hash (not a numeric suffix) so freed slugs aren't reassigned.
+- **Webhook idempotency** via the `StripeWebhookEvent` table.
+
+---
+
+## .ENV.EXAMPLE
+
+```
+DATABASE_URL=
+JWT_ACCESS_SECRET=
+JWT_REFRESH_SECRET=
+CSRF_SECRET=
+STRIPE_SECRET_KEY=
+STRIPE_WEBHOOK_SECRET=
+STRIPE_MONTHLY_PRICE_ID=
+STRIPE_ANNUAL_PRICE_ID=
+CLOUDINARY_CLOUD_NAME=
+CLOUDINARY_API_KEY=
+CLOUDINARY_API_SECRET=
+CLOUDINARY_UPLOAD_PRESET=
+POSTMARK_SERVER_TOKEN=
+EMAIL_FROM=hello@tradieafterdark.com
+ABN_LOOKUP_GUID=
+APP_BASE_URL=http://localhost:5173
+API_BASE_URL=http://localhost:3000
+CRON_TIMEZONE=Australia/Brisbane
+NODE_ENV=development
+```
+
+---
+
+## SEED SCRIPT
+
+Creates:
+- 1 admin user (`admin@tradieafterdark.com` / seeded password)
+- 4 tradie profiles:
+  - Verified, insured electrician in Brisbane (QBCC)
+  - Verified, insured plumber in Sydney (NSW Fair Trading)
+  - Verified, insured builder in Melbourne (VBA) with two licence classes
+  - Self-declared handyman in Brisbane (no licence required, no insurance)
+- 5 customer accounts
+- A dozen jobs across all statuses, including 1 disputed and 3 with reviews
+- A pending verification queue with 2 entries for admin to clear
+
+---
+
+## FOLDER STRUCTURE
+
+```
+/client                → React + Vite + TypeScript + Tailwind
+  /src
+    /components
+    /pages
+    /hooks
+    /lib              → API client, validators (shared Zod)
+/server               → Express + TypeScript
+  /routes             → auth, tradies, jobs, messages, reviews, enquiries, admin, webhooks
+  /middleware         → authGuard, adminGuard, rateLimit, csrf, errorHandler
+  /services           → stripe, cloudinary, email, abnLookup, cron, search
+  /config             → licenceMap, stateAuthorityMap
+  /lib                → prisma client, zod schemas
+/prisma               → schema.prisma, migrations, seed.ts
+/shared               → cross-cutting types and Zod schemas
+```
+
+---
+
+## BUILD INSTRUCTIONS
+
+Build the application end-to-end. Order of work:
+
+1. Prisma schema, migrations, seed
+2. Express API with auth + Stripe + webhooks (idempotent) + Cloudinary signed uploads + Postmark
+3. Verification queues (licence, ID, insurance), admin endpoints
+4. Job lifecycle + messaging endpoints
+5. React frontend: public pages → auth → tradie onboarding → tradie dashboard → customer dashboard → admin
+6. Cron jobs (licence/insurance expiry, job auto-confirm, review prompts)
+7. README with full local setup, Stripe CLI webhook setup (`stripe listen --forward-to localhost:3000/api/webhooks/stripe`), and seed instructions
+
+Every page listed must be fully functional. The verification queues, Stripe webhook handling, cron jobs, job lifecycle, in-app messaging, and email flows must all be implemented. The app must be demo-ready with seed data and a working admin login.
